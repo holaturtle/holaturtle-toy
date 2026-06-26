@@ -218,8 +218,8 @@
 
             <div class="w-full bg-gradient-to-b from-gray-800/80 to-gray-900/90 backdrop-blur-md rounded-3xl p-8 border border-purple-500/50 shadow-[0_0_30px_rgba(168,85,247,0.2)] mb-6">
                 <div class="flex justify-between items-center mb-6">
-                    <span id="question-progress" class="text-sm text-purple-400 font-bold tracking-widest uppercase">STAGE 1 / TIME ATTACK</span>
-                    <span id="threat-badge" class="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/50"><i class="fas fa-skull text-xs mr-1"></i> 惡魔來襲（初級）</span>
+                    <span id="question-progress" class="text-sm text-purple-400 font-bold tracking-widest uppercase">STAGE 1 / 5</span>
+                    <span class="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/50"><i class="fas fa-skull text-xs mr-1"></i> 惡魔來襲</span>
                 </div>
                 <h2 id="question-text" class="text-2xl md:text-3xl font-bold mb-8 leading-relaxed text-center text-white drop-shadow-md">
                     載入題目中...
@@ -342,13 +342,11 @@
                     </div>
 
                     <div class="mb-6">
-                        <label class="block text-sm text-gray-300 mb-2 font-bold">雲端題庫 API</label>
-                        <div class="w-full bg-gray-900 border border-cyan-700/60 rounded-lg px-4 py-3 text-xs text-cyan-200 break-all">
-                            已預設連結 Google 試算表題庫；GitHub Pages 版本會使用 JSONP 模式同步，無需另外設定。
-                        </div>
+                        <label class="block text-sm text-gray-300 mb-2 font-bold">GAS API Webhook URL</label>
+                        <input type="text" id="admin-api-url" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-xs text-gray-400 focus:outline-none focus:border-cyan-500 transition-colors" value="https://script.google.com/macros/s/AKfycbzsggYCrpUkL5CcHGVPoH_zicYQqDYMCNeO0RLh1DEOHQ8Qky_s_p3DC7pQ1f3xOU3Rqw/exec">
                     </div>
                     
-                    <button class="w-full btn-neon-blue py-3 rounded-lg font-bold mt-2 text-sm" onclick="importQuestionsFromCloud({silent:false})">重新同步雲端題庫</button>
+                    <button class="w-full btn-neon-blue py-3 rounded-lg font-bold mt-2 text-sm" onclick="alert('設定已儲存！即將生效。')">儲存參數設定</button>
                 </div>
 
                 <!-- 右側：AI 題庫匯入區 -->
@@ -371,29 +369,14 @@
                     </div>
                     <textarea id="ai-json-output" class="w-full h-48 bg-gray-900 border border-gray-600 rounded-lg p-3 text-xs font-mono text-emerald-400 mb-4 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" placeholder='等待 AI 生成中...'></textarea>
 
-                    <div class="mb-4 p-4 rounded-lg border border-cyan-500/40 bg-cyan-950/20">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-sm font-bold text-cyan-300"><i class="fas fa-cloud-download-alt mr-2"></i>Google 試算表雲端題庫</h4>
-                            <span id="cloud-question-count" class="text-xs text-gray-400">尚未匯入</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mb-3 leading-relaxed">
-                            指定欄位：級別、題目、選項1、選項2、選項3、選項4、答案、解析。<br>
-                            GitHub Pages 會自動使用 JSONP 避開跨網域限制。
-                        </p>
-                        <button id="btn-cloud-import" class="w-full bg-cyan-700 hover:bg-cyan-600 border border-cyan-400/60 py-3 rounded-lg text-sm transition-colors font-bold" onclick="importQuestionsFromCloud({silent:false})">
-                            <i class="fas fa-cloud-download-alt mr-2"></i>從雲端匯入題庫
-                        </button>
-                        <div id="cloud-import-status" class="mt-3 text-xs text-gray-400">等待同步 Google 試算表...</div>
-                    </div>
-
                     <div class="flex justify-between items-center mb-2">
                         <p class="text-xs text-gray-400">手動匯入題庫：</p>
                         <button class="text-xs text-cyan-400 hover:text-cyan-300 underline" onclick="downloadSampleCSV()"><i class="fas fa-download mr-1"></i>下載 CSV 公版範例</button>
                     </div>
                     <div class="flex gap-4">
                         <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
-                        <button class="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-500 py-3 rounded-lg text-sm transition-colors font-bold" onclick="document.getElementById('csv-file-input').click()"><i class="fas fa-file-csv mr-2"></i>上傳備用 CSV</button>
-                        <button class="flex-1 btn-neon py-3 rounded-lg text-sm font-bold" onclick="alert('題庫已同步！')"><i class="fas fa-cloud-upload-alt mr-2"></i>同步至資料庫</button>
+                        <button class="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-500 py-3 rounded-lg text-sm transition-colors font-bold" onclick="document.getElementById('csv-file-input').click()"><i class="fas fa-file-csv mr-2"></i>本機上傳 CSV</button>
+                        <button class="flex-1 bg-cyan-700 hover:bg-cyan-600 border border-cyan-500 py-3 rounded-lg text-sm transition-colors font-bold" onclick="fetchQuestionsFromGAS()"><i class="fas fa-cloud-download-alt mr-2"></i>從 Google 表單載入題庫</button>
                     </div>
                 </div>
             </div>
@@ -403,12 +386,7 @@
 
     <script>
         // 系統變數
-        const DEFAULT_GAS_API_URL = "https://script.google.com/macros/s/AKfycbzsggYCrpUkL5CcHGVPoH_zicYQqDYMCNeO0RLh1DEOHQ8Qky_s_p3DC7pQ1f3xOU3Rqw/exec";
-        const QUESTIONS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fgf4cDO3Kg67ARaAeXI1ONr9txe6jsDXJHHkHQytudw/edit?usp=sharing";
-
-        function getGasApiUrl() {
-            return DEFAULT_GAS_API_URL;
-        }
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzsggYCrpUkL5CcHGVPoH_zicYQqDYMCNeO0RLh1DEOHQ8Qky_s_p3DC7pQ1f3xOU3Rqw/exec";
         
         let currentState = {
             playerName: '',
@@ -419,48 +397,18 @@
             timeLeft: 300.0,
             gameDuration: 300.0,
             questionIndex: 0,
-            answeredCount: 0,
             timerInterval: null
         };
 
-        let cloudQuestionsLoaded = false;
-        let cloudQuestionLoadAttempted = false;
-
-        // 備用題庫：雲端載入失敗時才使用
+        // 預設題庫 
         let questionsDB = [
-            { level: "初級", q: "在循環經濟的 3R 原則中，Reduce 代表什麼？", opts: ["回收利用", "減少使用", "重複使用", "拒絕使用"], ans: 1, explanation: "Reduce 代表減少使用，是循環經濟常見的 3R 原則之一。" },
-            { level: "中級", q: "下列何者是台灣目前主要的再生能源發展重點？", opts: ["地熱能與生質能", "核能與潮汐能", "太陽光電與離岸風電", "天然氣與燃煤"], ans: 2, explanation: "臺灣近年再生能源發展重點包含太陽光電與離岸風電。" },
-            { level: "中級", q: "「碳足跡」主要用來衡量什麼？", opts: ["動物在泥地上留下的腳印", "商品生命週期產生的溫室氣體排放量", "森林吸收二氧化碳的能力", "工廠佔地面積"], ans: 1, explanation: "碳足跡用來估算產品或活動生命週期中的溫室氣體排放量。" },
-            { level: "初級", q: "購買家電時，應該認明哪種標章最能確保省電？", opts: ["環保標章", "節能標章", "碳足跡標籤", "商品安全標章"], ans: 1, explanation: "節能標章可協助辨識能源效率較佳的產品。" },
-            { level: "中高級", q: "為保護海洋生態，我們應該避免使用含有何種成分的防曬乳？", opts: ["氧化鋅", "二氧化鈦", "氧苯酮 (Oxybenzone)", "甘油"], ans: 2, explanation: "部分防曬成分可能對珊瑚與海洋生態造成影響。" }
+            { q: "在循環經濟的 3R 原則中，Reduce 代表什麼？", opts: ["回收利用", "減少使用", "重複使用", "拒絕使用"], ans: 1 },
+            { q: "下列何者是台灣目前主要的再生能源發展重點？", opts: ["地熱能與生質能", "核能與潮汐能", "太陽光電與離岸風電", "天然氣與燃煤"], ans: 2 },
+            { q: "「碳足跡」主要用來衡量什麼？", opts: ["動物在泥地上留下的腳印", "商品生命週期產生的溫室氣體排放量", "森林吸收二氧化碳的能力", "工廠佔地面積"], ans: 1 },
+            { q: "購買家電時，應該認明哪種標章最能確保省電？", opts: ["環保標章", "節能標章", "碳足跡標籤", "商品安全標章"], ans: 1 },
+            { q: "為保護海洋生態，我們應該避免使用含有何種成分的防曬乳？", opts: ["氧化鋅", "二氧化鈦", "氧苯酮 (Oxybenzone)", "甘油"], ans: 2 }
         ];
         let currentQuestions = [];
-
-        function shuffleQuestions(source) {
-            return [...source].sort(() => 0.5 - Math.random());
-        }
-
-        function formatTime(seconds) {
-            const safeSeconds = Math.max(0, Math.ceil(seconds));
-            const mins = Math.floor(safeSeconds / 60).toString().padStart(2, '0');
-            const secs = (safeSeconds % 60).toString().padStart(2, '0');
-            return `${mins}:${secs}`;
-        }
-
-        function updateTimerUI() {
-            document.getElementById('timer-display').innerText = formatTime(currentState.timeLeft);
-            const hpPercent = (currentState.timeLeft / currentState.gameDuration) * 100;
-            document.getElementById('hp-bar').style.width = `${Math.max(0, hpPercent)}%`;
-        }
-
-        function escapeHTML(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
 
         const charConfig = {
             'assassin': { name: '雙刃刺客', color: 'text-yellow-400', bg: 'bg-yellow-500', icon: 'fa-khanda', persona: '冷酷、敏捷、說話簡潔、重視資源回收與精準度' },
@@ -473,211 +421,6 @@
         const btnStart = document.getElementById('btn-start');
 
         playerNameInput.addEventListener('input', checkStartCondition);
-
-        // ================= Google 試算表雲端題庫匯入：GitHub Pages JSONP 版 =================
-        function buildUrl(url, params) {
-            const query = Object.entries(params)
-                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-                .join('&');
-            return `${url}${url.includes('?') ? '&' : '?'}${query}`;
-        }
-
-        function loadJSONP(url, timeoutMs = 30000) {
-            return new Promise((resolve, reject) => {
-                const callbackName = `__questionCloudCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-                const script = document.createElement('script');
-                let timer = null;
-
-                function cleanup() {
-                    if (timer) clearTimeout(timer);
-                    if (script.parentNode) script.parentNode.removeChild(script);
-                    try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
-                }
-
-                window[callbackName] = function(payload) {
-                    cleanup();
-                    resolve(payload);
-                };
-
-                script.src = buildUrl(url, { action: 'questions', callback: callbackName, t: Date.now() });
-                script.async = true;
-                script.onerror = () => {
-                    cleanup();
-                    reject(new Error('JSONP 載入失敗：請確認 Apps Script 支援 callback 參數。'));
-                };
-
-                timer = setTimeout(() => {
-                    cleanup();
-                    reject(new Error('雲端題庫連線逾時。'));
-                }, timeoutMs);
-
-                document.body.appendChild(script);
-            });
-        }
-
-        function normalizeAnswerIndex(rawAnswer) {
-            if (rawAnswer === undefined || rawAnswer === null) return -1;
-            const text = String(rawAnswer).trim().toUpperCase();
-            const numeric = parseInt(text, 10);
-            if (!isNaN(numeric) && numeric >= 1 && numeric <= 4) return numeric - 1;
-            const letterMap = { A: 0, B: 1, C: 2, D: 3 };
-            if (Object.prototype.hasOwnProperty.call(letterMap, text)) return letterMap[text];
-            return -1;
-        }
-
-        function normalizeHeaderKey(key) {
-            return String(key ?? '')
-                .replace(/^\uFEFF/, '')
-                .replace(/\s+/g, '')
-                .replace(/[：:]/g, '')
-                .trim()
-                .toLowerCase();
-        }
-
-        function normalizeCellText(value) {
-            return String(value ?? '')
-                .replace(/^\uFEFF/, '')
-                .replace(/[\r\n\t]+/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        function getField(row, keys) {
-            if (!row || typeof row !== 'object') return '';
-            const normalizedWantedKeys = keys.map(normalizeHeaderKey);
-            for (const key of keys) {
-                if (row[key] !== undefined && row[key] !== null && normalizeCellText(row[key]) !== '') {
-                    return normalizeCellText(row[key]);
-                }
-            }
-            for (const [actualKey, value] of Object.entries(row)) {
-                const normalizedActualKey = normalizeHeaderKey(actualKey);
-                if (normalizedWantedKeys.includes(normalizedActualKey) && normalizeCellText(value) !== '') {
-                    return normalizeCellText(value);
-                }
-            }
-            return '';
-        }
-
-        function valuesToObjectRows(values) {
-            if (!Array.isArray(values) || values.length < 2) return [];
-            const headers = values[0].map(h => normalizeCellText(h));
-            return values.slice(1).map(row => {
-                const obj = {};
-                headers.forEach((header, index) => { obj[header] = row[index] ?? ''; });
-                return obj;
-            });
-        }
-
-        function extractQuestionRows(payload) {
-            if (Array.isArray(payload)) {
-                if (payload.length > 0 && Array.isArray(payload[0])) return valuesToObjectRows(payload);
-                return payload;
-            }
-            if (!payload || typeof payload !== 'object') return [];
-            const candidateKeys = ['questions', 'data', 'rows', 'items'];
-            for (const key of candidateKeys) {
-                if (Array.isArray(payload[key])) {
-                    if (payload[key].length > 0 && Array.isArray(payload[key][0])) return valuesToObjectRows(payload[key]);
-                    return payload[key];
-                }
-            }
-            if (Array.isArray(payload.values)) return valuesToObjectRows(payload.values);
-            return [];
-        }
-
-        function normalizeLevelLabel(rawLevel) {
-            let text = normalizeCellText(rawLevel).replace(/[()（）]/g, '').replace(/^難度/, '').replace(/^級別/, '').trim();
-            const compact = text.replace(/\s+/g, '').toLowerCase();
-            const aliasMap = {
-                '初': '初級', '初級': '初級', 'easy': '初級', '簡單': '初級',
-                '中': '中級', '中級': '中級', 'normal': '中級', 'medium': '中級', '普通': '中級',
-                '高': '高級', '高級': '高級', 'hard': '高級', '困難': '高級',
-                '中高': '中高級', '中高級': '中高級', 'midhigh': '中高級'
-            };
-            if (aliasMap[compact]) return aliasMap[compact];
-            if (compact.includes('中高')) return '中高級';
-            if (compact.includes('初')) return '初級';
-            if (compact.includes('中')) return '中級';
-            if (compact.includes('高')) return '高級';
-            return text || '未分級';
-        }
-
-        function getThreatInfo(rawLevel) {
-            const level = normalizeLevelLabel(rawLevel);
-            const map = {
-                '初級': { text: '惡魔來襲（初級）', icon: 'fa-skull', className: 'px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/50' },
-                '中級': { text: '魂潮入侵（中級）', icon: 'fa-water', className: 'px-3 py-1 bg-cyan-500/20 text-cyan-300 text-xs rounded-full border border-cyan-500/50' },
-                '高級': { text: '惡魔公攻襲（高級）', icon: 'fa-dragon', className: 'px-3 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full border border-purple-500/50' },
-                '中高級': { text: '惡魔將強襲（中高級）', icon: 'fa-crown', className: 'px-3 py-1 bg-amber-500/20 text-amber-300 text-xs rounded-full border border-amber-500/50' }
-            };
-            return map[level] || { text: `未知威脅（${level}）`, icon: 'fa-circle-question', className: 'px-3 py-1 bg-gray-500/20 text-gray-300 text-xs rounded-full border border-gray-500/50' };
-        }
-
-        function renderThreatBadge(rawLevel) {
-            const badge = document.getElementById('threat-badge');
-            if (!badge) return;
-            const threat = getThreatInfo(rawLevel);
-            badge.className = threat.className;
-            badge.innerHTML = `<i class="fas ${threat.icon} text-xs mr-1"></i> ${escapeHTML(threat.text)}`;
-        }
-
-        function normalizeSheetQuestion(row, index) {
-            const level = normalizeLevelLabel(getField(row, ['級別', 'level', 'difficulty', '難度']));
-            const q = getField(row, ['題目', 'question', 'q']);
-            const option1 = getField(row, ['選項1', 'option1', 'option_a', 'A']);
-            const option2 = getField(row, ['選項2', 'option2', 'option_b', 'B']);
-            const option3 = getField(row, ['選項3', 'option3', 'option_c', 'C']);
-            const option4 = getField(row, ['選項4', 'option4', 'option_d', 'D']);
-            const answer = getField(row, ['答案', 'answer', 'ans']);
-            const explanation = getField(row, ['解析', 'explanation']);
-            const ans = normalizeAnswerIndex(answer);
-            const opts = [option1, option2, option3, option4];
-            if (!q || opts.some(opt => !opt) || ans < 0 || ans > 3) {
-                console.warn(`略過第 ${index + 1} 筆題目，欄位不完整：`, row);
-                return null;
-            }
-            return { id: row.id || row.ID || `cloud_${index + 1}`, level, q, opts, ans, explanation, source: 'google_sheets' };
-        }
-
-        async function importQuestionsFromCloud(options = {}) {
-            const btn = document.getElementById('btn-cloud-import');
-            const status = document.getElementById('cloud-import-status');
-            const countLabel = document.getElementById('cloud-question-count');
-            const apiUrl = getGasApiUrl();
-            const silent = Boolean(options.silent);
-            cloudQuestionLoadAttempted = true;
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>雲端匯入中...'; }
-            if (status) status.innerHTML = `<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>正在用 JSONP 連線：${escapeHTML(apiUrl)}</span>`;
-            try {
-                const payload = await loadJSONP(apiUrl);
-                const rows = extractQuestionRows(payload);
-                const parsedQuestions = rows.map((row, index) => normalizeSheetQuestion(row, index)).filter(Boolean);
-                if (parsedQuestions.length === 0) throw new Error('雲端資料沒有符合欄位格式的題目。');
-                questionsDB = parsedQuestions;
-                cloudQuestionsLoaded = true;
-                if (countLabel) countLabel.innerText = `已匯入 ${parsedQuestions.length} 題`;
-                if (status) status.innerHTML = `<span class="text-emerald-400"><i class="fas fa-check-circle mr-1"></i>成功匯入 ${parsedQuestions.length} 題。GitHub Pages 可正常使用。</span>`;
-                if (!silent) alert(`✅ 成功從 Google 試算表匯入 ${parsedQuestions.length} 題！`);
-            } catch (error) {
-                console.error('雲端題庫匯入失敗：', error);
-                if (countLabel) countLabel.innerText = '匯入失敗';
-                if (status) status.innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i>匯入失敗：${escapeHTML(error.message)}</span>`;
-                if (!silent) alert(`❌ 雲端題庫匯入失敗：${error.message}\n\nGitHub Pages 請改用支援 callback 的 Apps Script JSONP 版本。`);
-            } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>從雲端匯入題庫'; }
-            }
-        }
-
-        function autoLoadCloudQuestions() {
-            const status = document.getElementById('cloud-import-status');
-            const countLabel = document.getElementById('cloud-question-count');
-            if (status) status.innerHTML = '<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>開啟遊戲，自動同步雲端題庫中...</span>';
-            if (countLabel) countLabel.innerText = '自動同步中';
-            importQuestionsFromCloud({silent:true});
-        }
-
-        document.addEventListener('DOMContentLoaded', autoLoadCloudQuestions);
 
         // ================= Gemini API 呼叫模組 (含指數退避重試) =================
         async function callGeminiAPI(prompt, systemInstruction = null, jsonSchema = null) {
@@ -785,19 +528,77 @@
             try {
                 const newQuestions = JSON.parse(textarea.value);
                 if (Array.isArray(newQuestions) && newQuestions.length > 0) {
-                    questionsDB = newQuestions.map((q, index) => ({
-                        level: normalizeLevelLabel(q.level || q.difficulty || '中級'),
-                        q: q.q || q.question,
-                        opts: q.opts || [q.option1, q.option2, q.option3, q.option4],
-                        ans: typeof q.ans === 'number' ? q.ans : normalizeAnswerIndex(q.answer),
-                        explanation: q.explanation || ''
-                    })).filter(q => q.q && Array.isArray(q.opts) && q.opts.length === 4 && q.ans >= 0);
-                    alert(`成功套用 AI 題庫！共 ${questionsDB.length} 題，下一場遊戲將使用新題目。`);
+                    questionsDB = newQuestions;
+                    alert('成功套用 AI 題庫！下一場遊戲將使用新題目。');
                 } else {
                     alert('資料格式有誤，無法套用。請確認格式為 JSON 陣列。');
                 }
             } catch(e) {
                 alert('JSON 解析失敗，請確認內容格式是否正確。');
+            }
+        }
+
+        // ================= GAS API 雲端讀取題庫 =================
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+                window[callbackName] = function(data) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    resolve(data);
+                };
+                const script = document.createElement('script');
+                script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + callbackName;
+                script.onerror = function() {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    reject(new Error('JSONP failed'));
+                };
+                document.body.appendChild(script);
+            });
+        }
+
+        async function fetchQuestionsFromGAS() {
+            const apiUrl = document.getElementById('admin-api-url').value.trim();
+            if (!apiUrl) {
+                alert('請先在左側系統參數設定輸入 GAS API Webhook URL');
+                return;
+            }
+            
+            try {
+                const btn = document.querySelector('button[onclick="fetchQuestionsFromGAS()"]');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>同步中...';
+                btn.disabled = true;
+
+                const data = await fetchJSONP(apiUrl);
+                
+                if (data && data.success && data.questions) {
+                    const newQuestions = data.questions.map(item => ({
+                        q: item["題目 (Question)"],
+                        opts: [item["選項A"], item["選項B"], item["選項C"], item["選項D"]],
+                        ans: parseInt(item["正解(1-4)"]) - 1,
+                        level: item["難度"] || "normal"
+                    })).filter(q => q.q && !isNaN(q.ans));
+                    
+                    if (newQuestions.length > 0) {
+                        questionsDB = newQuestions;
+                        alert(`✅ 成功從 Google Sheets 雲端同步 ${newQuestions.length} 題！\n下一場遊戲將使用雲端題庫。`);
+                    } else {
+                        alert('⚠️ 雲端表單為空，或格式不符。');
+                    }
+                } else {
+                    alert('❌ 解析雲端資料失敗。請確認表單格式是否正確。');
+                }
+                
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            } catch (err) {
+                console.error(err);
+                alert('❌ 連線至雲端 API 失敗。請確認 GAS 網址正確且支援 JSONP。');
+                const btn = document.querySelector('button[onclick="fetchQuestionsFromGAS()"]');
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>從 Google 表單載入題庫';
+                btn.disabled = false;
             }
         }
 
@@ -829,33 +630,43 @@
             reader.onload = function(e) {
                 const text = e.target.result;
                 try {
+                    // 解析換行
                     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
                     let newQuestions = [];
+                    
+                    // 跳過標題，從第二行開始解析
                     for(let i = 1; i < lines.length; i++) {
-                        const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
-                        if (cols.length >= 8) {
-                            const level = normalizeLevelLabel(cols[0]);
-                            const q = cols[1];
-                            const opts = [cols[2], cols[3], cols[4], cols[5]];
-                            const ans = normalizeAnswerIndex(cols[6]);
-                            const explanation = cols[7] || '';
-                            if(q && opts.every(Boolean) && ans >= 0 && ans <= 3) {
-                                newQuestions.push({level, q, opts, ans, explanation});
+                        // 處理 CSV 格式，容許欄位內有引號
+                        const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                        if (cols.length >= 6) {
+                            const q = cols[0].replace(/^"|"$/g, '').trim();
+                            const opts = [
+                                cols[1].replace(/^"|"$/g, '').trim(),
+                                cols[2].replace(/^"|"$/g, '').trim(),
+                                cols[3].replace(/^"|"$/g, '').trim(),
+                                cols[4].replace(/^"|"$/g, '').trim()
+                            ];
+                            // 將 1~4 轉為 0~3 陣列索引
+                            const ans = parseInt(cols[5].replace(/^"|"$/g, '').trim()) - 1; 
+                            const level = cols[6] ? cols[6].replace(/^"|"$/g, '').trim() : 'normal';
+                            
+                            if(q && !isNaN(ans) && ans >= 0 && ans <= 3) {
+                                newQuestions.push({q, opts, ans, level});
                             }
                         }
                     }
+
                     if (newQuestions.length > 0) {
-                        questionsDB = newQuestions;
-                        cloudQuestionsLoaded = false;
+                        questionsDB = newQuestions; // 替換系統題庫
                         alert(`✅ 成功匯入 ${newQuestions.length} 題！下一局將採用您上傳的 CSV 題庫。`);
                     } else {
-                        alert('❌ 匯入失敗，請確認 CSV 欄位：級別、題目、選項1、選項2、選項3、選項4、答案、解析。');
+                        alert('❌ 匯入失敗，請確認 CSV 格式是否與公版完全一致（正解需填寫 1~4）。');
                     }
                 } catch(err) {
                     alert('解析 CSV 發生錯誤，請檢查檔案編碼是否異常。');
                     console.error(err);
                 }
-                event.target.value = '';
+                event.target.value = ''; // 允許重複上傳同一個檔案
             };
             reader.readAsText(file);
         }
@@ -911,42 +722,19 @@
             });
             btnElement.classList.add('active');
             currentState.gameDuration = seconds;
-            currentState.timeLeft = seconds;
-            localStorage.setItem('ghost_hunter_game_duration', String(seconds));
-        }
-
-        function restoreGameDurationSetting() {
-            const saved = parseInt(localStorage.getItem('ghost_hunter_game_duration'), 10);
-            if (!isNaN(saved) && saved > 0) {
-                currentState.gameDuration = saved;
-                currentState.timeLeft = saved;
-                const buttons = document.querySelectorAll('.admin-option-btn');
-                buttons.forEach(btn => {
-                    const onclickText = btn.getAttribute('onclick') || '';
-                    btn.classList.toggle('active', onclickText.includes(`, ${saved})`) || onclickText.includes(`,${saved})`));
-                });
-            }
         }
 
         function startGame() {
-            if (!cloudQuestionsLoaded && !cloudQuestionLoadAttempted) {
-                importQuestionsFromCloud({silent:true});
-            }
             currentState.playerName = playerNameInput.value.trim() || 'Anonymous';
             currentState.score = 0;
             currentState.combo = 0;
             currentState.maxCombo = 0;
             currentState.timeLeft = currentState.gameDuration;
             currentState.questionIndex = 0;
-            currentState.answeredCount = 0;
             
-            if (!questionsDB || questionsDB.length === 0) {
-                alert('目前沒有可用題庫，請先確認雲端題庫或上傳 CSV。');
-                return;
-            }
-
-            // Time Attack 模式：題庫答完會重新洗牌，直到時間歸零。
-            currentQuestions = shuffleQuestions(questionsDB);
+            // 如果題庫數量足夠，隨機挑選 5 題；如果不夠，全拿
+            const qCount = Math.min(5, questionsDB.length);
+            currentQuestions = [...questionsDB].sort(() => 0.5 - Math.random()).slice(0, qCount);
             
             const char = charConfig[currentState.character];
             document.getElementById('game-player-name').innerText = currentState.playerName;
@@ -959,10 +747,13 @@
             loadQuestion();
             
             clearInterval(currentState.timerInterval);
-            updateTimerUI();
             currentState.timerInterval = setInterval(() => {
                 currentState.timeLeft -= 0.1;
-                updateTimerUI();
+                document.getElementById('timer-display').innerText = currentState.timeLeft.toFixed(1);
+                
+                const hpPercent = (currentState.timeLeft / currentState.gameDuration) * 100;
+                document.getElementById('hp-bar').style.width = `${Math.max(0, hpPercent)}%`;
+
                 if (currentState.timeLeft <= 0) {
                     endGame();
                 }
@@ -970,22 +761,13 @@
         }
 
         function loadQuestion() {
-            if (!currentQuestions || currentQuestions.length === 0) {
-                alert('目前沒有可用題目。');
+            if (currentState.questionIndex >= currentQuestions.length) {
                 endGame();
                 return;
             }
-            if (currentState.questionIndex >= currentQuestions.length) {
-                currentQuestions = shuffleQuestions(questionsDB);
-                currentState.questionIndex = 0;
-            }
-
-            const oldBox = document.getElementById('explanation-box');
-            if (oldBox) oldBox.remove();
 
             const qData = currentQuestions[currentState.questionIndex];
-            document.getElementById('question-progress').innerText = `STAGE ${currentState.answeredCount + 1} / TIME ATTACK`;
-            renderThreatBadge(qData.level);
+            document.getElementById('question-progress').innerText = `STAGE ${currentState.questionIndex + 1} / ${currentQuestions.length}`;
             document.getElementById('question-text').innerText = qData.q;
             
             const optsContainer = document.getElementById('options-container');
@@ -996,7 +778,7 @@
                 btn.className = 'w-full text-left p-4 rounded-xl bg-gray-800 border-2 border-gray-600 hover:border-purple-400 hover:bg-gray-700 transition-all text-white font-medium group relative overflow-hidden';
                 btn.innerHTML = `
                     <span class="inline-block w-8 h-8 rounded-full bg-gray-900 border border-gray-600 text-center leading-7 mr-3 group-hover:border-purple-400 group-hover:text-purple-400 transition-colors">${String.fromCharCode(65 + index)}</span>
-                    ${escapeHTML(opt)}
+                    ${opt}
                 `;
                 btn.onclick = () => handleAnswer(index, qData.ans, btn);
                 optsContainer.appendChild(btn);
@@ -1028,18 +810,10 @@
             }
 
             updateScoreUI();
-            const qData = currentQuestions[currentState.questionIndex];
-            const explanation = qData.explanation ? `<div class="mt-4 p-4 rounded-xl border border-cyan-500/40 bg-cyan-950/30 text-sm text-cyan-100 leading-relaxed"><span class="font-bold text-cyan-300">解析：</span>${escapeHTML(qData.explanation)}</div>` : '';
-            if (explanation) {
-                document.getElementById('options-container').insertAdjacentHTML('afterend', `<div id="explanation-box">${explanation}</div>`);
-            }
             setTimeout(() => {
-                const oldBox = document.getElementById('explanation-box');
-                if (oldBox) oldBox.remove();
-                currentState.answeredCount++;
                 currentState.questionIndex++;
                 loadQuestion();
-            }, explanation ? 2200 : 1000);
+            }, 1000);
         }
 
         function updateScoreUI() {
@@ -1117,8 +891,8 @@
 
                 tr.innerHTML = `
                     <td class="p-4 text-center">${rankHtml}</td>
-                    <td class="p-4 ${row.isCurrent ? 'text-pink-300' : 'text-gray-200'}">${escapeHTML(row.name)}</td>
-                    <td class="p-4 text-sm text-gray-400">${escapeHTML(row.class)}</td>
+                    <td class="p-4 ${row.isCurrent ? 'text-pink-300' : 'text-gray-200'}">${row.name}</td>
+                    <td class="p-4 text-sm text-gray-400">${row.class}</td>
                     <td class="p-4 text-right font-mono text-lg ${row.isCurrent ? 'text-yellow-400' : 'text-white'}">${row.score}</td>
                 `;
                 tbody.appendChild(tr);
@@ -1186,7 +960,6 @@
             });
             requestAnimationFrame(animateParticles);
         }
-        restoreGameDurationSetting();
         animateParticles();
 
     </script>
