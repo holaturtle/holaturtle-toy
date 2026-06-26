@@ -187,8 +187,11 @@
             <div class="flex flex-col items-center gap-4">
                 <input type="text" id="player-name" placeholder="輸入玩家代號..." class="bg-gray-800/80 border border-purple-500 rounded-full px-6 py-3 text-center text-white focus:outline-none focus:border-pink-500 focus:shadow-[0_0_10px_rgba(236,72,153,0.5)] transition-all w-64" autocomplete="off">
                 <button id="btn-start" class="btn-neon px-12 py-4 rounded-full text-xl font-bold tracking-wider" disabled onclick="startGame()">
-                    START MISSION <i class="fas fa-play ml-2"></i>
+                    題庫載入中... <i class="fas fa-spinner fa-spin ml-2"></i>
                 </button>
+                <div id="entry-question-status" class="text-xs text-yellow-300 text-center min-h-[1.25rem]">
+                    🔄 正在自動載入 questions.csv 題庫...
+                </div>
             </div>
         </section>
 
@@ -387,7 +390,7 @@
 
     <script>
         // 系統變數
-        // v15：改為直接讀取 GitHub Pages 同層 questions.csv，不再使用 GAS API。
+        // v16：開啟網頁後立即讀取 GitHub Pages 同層 questions.csv；不再使用 GAS API。
         const DEFAULT_CSV_URL = "questions.csv";
         
         let currentState = {
@@ -416,6 +419,7 @@
         let cloudQuestionsLoading = false;
         let cloudQuestionsPromise = null;
         let cloudLastError = '';
+        let questionBankReady = false;
 
         function setCloudStatus(message, type = 'info') {
             const el = document.getElementById('cloud-sync-status');
@@ -429,6 +433,26 @@
             };
             el.className = `mt-3 text-xs leading-relaxed ${colorMap[type] || colorMap.info}`;
             el.innerHTML = message;
+        }
+
+        function setEntryQuestionStatus(message, type = 'info') {
+            const el = document.getElementById('entry-question-status');
+            if (!el) return;
+            const colorMap = {
+                info: 'text-gray-300',
+                loading: 'text-yellow-300',
+                success: 'text-emerald-300',
+                warn: 'text-amber-300',
+                error: 'text-red-300'
+            };
+            el.className = `text-xs text-center min-h-[1.25rem] ${colorMap[type] || colorMap.info}`;
+            el.innerHTML = message;
+        }
+
+        function setQuestionBankReady(isReady, message = '') {
+            questionBankReady = isReady;
+            if (message) setEntryQuestionStatus(message, isReady ? 'success' : 'loading');
+            checkStartCondition();
         }
 
         function shuffleQuestions(source) {
@@ -632,7 +656,7 @@
         }
 
         // ================= GitHub CSV 題庫讀取 =================
-        // v15 不再使用 Apps Script / GAS；題庫改讀 GitHub Pages 同層 questions.csv。
+        // v16 不再使用 Apps Script / GAS；題庫改讀 GitHub Pages 同層 questions.csv。
 
         function extractRawQuestions(data) {
             if (Array.isArray(data?.questions)) return data.questions;
@@ -662,7 +686,8 @@
             questionsDB = newQuestions;
             cloudQuestionsLoaded = true;
             cloudLastError = '';
-            setCloudStatus(`✅ 雲端題庫同步成功：${newQuestions.length} 題。來源：${sourceLabel}。`, 'success');
+            setCloudStatus(`✅ GitHub 題庫同步成功：${newQuestions.length} 題。來源：${sourceLabel}。`, 'success');
+            setQuestionBankReady(true, `✅ 題庫已就緒：${newQuestions.length} 題。可以開始任務。`);
             console.log(`✅ 題庫同步成功：${newQuestions.length} 題，來源：${sourceLabel}`);
             return true;
         }
@@ -738,6 +763,7 @@
             cloudQuestionsPromise = (async () => {
                 try {
                     cloudQuestionsLoading = true;
+                    setQuestionBankReady(false, `🔄 正在自動載入 ${csvUrl} 題庫...`);
                     setCloudStatus(`🔄 正在讀取 GitHub 題庫：${csvUrl}`, 'loading');
                     if (btn) {
                         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>讀取中...';
@@ -757,6 +783,7 @@
                     cloudLastError = err?.message || String(err);
                     console.warn('GitHub CSV sync failed; keeping local fallback questions:', err);
                     setCloudStatus(`⚠️ GitHub 題庫尚未同步：${cloudLastError}。已保留內建備援題庫。`, 'warn');
+                    setQuestionBankReady(true, `⚠️ questions.csv 未讀到，已改用內建備援題庫 ${questionsDB.length} 題。`);
                     return false;
                 } finally {
                     cloudQuestionsLoading = false;
@@ -843,10 +870,20 @@
         }
 
         function checkStartCondition() {
-            if (currentState.character && playerNameInput.value.trim().length > 0) {
+            const hasPlayer = playerNameInput.value.trim().length > 0;
+            const hasCharacter = !!currentState.character;
+            const ready = questionBankReady && !cloudQuestionsLoading && Array.isArray(questionsDB) && questionsDB.length > 0;
+
+            if (ready && hasCharacter && hasPlayer) {
                 btnStart.disabled = false;
+                btnStart.innerHTML = 'START MISSION <i class="fas fa-play ml-2"></i>';
             } else {
                 btnStart.disabled = true;
+                if (!ready) {
+                    btnStart.innerHTML = '題庫載入中... <i class="fas fa-spinner fa-spin ml-2"></i>';
+                } else {
+                    btnStart.innerHTML = 'START MISSION <i class="fas fa-play ml-2"></i>';
+                }
             }
         }
 
@@ -1135,6 +1172,7 @@
             if (csvInput && !csvInput.value.trim()) csvInput.value = DEFAULT_CSV_URL;
 
             updateTimerUI();
+            setQuestionBankReady(false, '🔄 正在自動載入 questions.csv 題庫...');
             await fetchQuestionsFromGitHubCSV({ silent: true });
         }
 
