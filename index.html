@@ -344,7 +344,7 @@
                     <div class="mb-6">
                         <label class="block text-sm text-gray-300 mb-2 font-bold">雲端題庫 API</label>
                         <div class="w-full bg-gray-900 border border-cyan-700/60 rounded-lg px-4 py-3 text-xs text-cyan-200 break-all">
-                            已預設連結 Google 試算表題庫，開啟遊戲時會自動匯入，無需另外設定。
+                            已預設連結 Google 試算表題庫；GitHub Pages 版本會使用 JSONP 模式同步，無需另外設定。
                         </div>
                     </div>
                     
@@ -378,9 +378,9 @@
                         </div>
                         <p class="text-xs text-gray-400 mb-3 leading-relaxed">
                             指定欄位：級別、題目、選項1、選項2、選項3、選項4、答案、解析。<br>
-                            匯入後會直接替換目前遊戲題庫。
+                            GitHub Pages 會自動使用 JSONP 避開跨網域限制。
                         </p>
-                        <button id="btn-cloud-import" class="w-full bg-cyan-700 hover:bg-cyan-600 border border-cyan-400/60 py-3 rounded-lg text-sm transition-colors font-bold" onclick="importQuestionsFromCloud()">
+                        <button id="btn-cloud-import" class="w-full bg-cyan-700 hover:bg-cyan-600 border border-cyan-400/60 py-3 rounded-lg text-sm transition-colors font-bold" onclick="importQuestionsFromCloud({silent:false})">
                             <i class="fas fa-cloud-download-alt mr-2"></i>從雲端匯入題庫
                         </button>
                         <div id="cloud-import-status" class="mt-3 text-xs text-gray-400">等待同步 Google 試算表...</div>
@@ -426,13 +426,13 @@
         let cloudQuestionsLoaded = false;
         let cloudQuestionLoadAttempted = false;
 
-        // 預設題庫 
+        // 備用題庫：雲端載入失敗時才使用
         let questionsDB = [
             { level: "初級", q: "在循環經濟的 3R 原則中，Reduce 代表什麼？", opts: ["回收利用", "減少使用", "重複使用", "拒絕使用"], ans: 1, explanation: "Reduce 代表減少使用，是循環經濟常見的 3R 原則之一。" },
             { level: "中級", q: "下列何者是台灣目前主要的再生能源發展重點？", opts: ["地熱能與生質能", "核能與潮汐能", "太陽光電與離岸風電", "天然氣與燃煤"], ans: 2, explanation: "臺灣近年再生能源發展重點包含太陽光電與離岸風電。" },
             { level: "中級", q: "「碳足跡」主要用來衡量什麼？", opts: ["動物在泥地上留下的腳印", "商品生命週期產生的溫室氣體排放量", "森林吸收二氧化碳的能力", "工廠佔地面積"], ans: 1, explanation: "碳足跡用來估算產品或活動生命週期中的溫室氣體排放量。" },
             { level: "初級", q: "購買家電時，應該認明哪種標章最能確保省電？", opts: ["環保標章", "節能標章", "碳足跡標籤", "商品安全標章"], ans: 1, explanation: "節能標章可協助辨識能源效率較佳的產品。" },
-            { level: "中高級", q: "為保護海洋生態，我們應該避免使用含有何種成分的防曬乳？", opts: ["氧化鋅", "二氧化鈦", "氧苯酮 (Oxybenzone)", "甘油"], ans: 2, explanation: "部分防曬成分可能對珊瑚與海洋生態造成影響，選購時可留意海洋友善標示。" }
+            { level: "中高級", q: "為保護海洋生態，我們應該避免使用含有何種成分的防曬乳？", opts: ["氧化鋅", "二氧化鈦", "氧苯酮 (Oxybenzone)", "甘油"], ans: 2, explanation: "部分防曬成分可能對珊瑚與海洋生態造成影響。" }
         ];
         let currentQuestions = [];
 
@@ -453,6 +453,15 @@
             document.getElementById('hp-bar').style.width = `${Math.max(0, hpPercent)}%`;
         }
 
+        function escapeHTML(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         const charConfig = {
             'assassin': { name: '雙刃刺客', color: 'text-yellow-400', bg: 'bg-yellow-500', icon: 'fa-khanda', persona: '冷酷、敏捷、說話簡潔、重視資源回收與精準度' },
             'captain': { name: '紫焰隊長', color: 'text-purple-400', bg: 'bg-purple-500', icon: 'fa-fire', persona: '熱情、充滿領導力、語氣激昂、重視能源轉型與團隊合作' },
@@ -464,6 +473,211 @@
         const btnStart = document.getElementById('btn-start');
 
         playerNameInput.addEventListener('input', checkStartCondition);
+
+        // ================= Google 試算表雲端題庫匯入：GitHub Pages JSONP 版 =================
+        function buildUrl(url, params) {
+            const query = Object.entries(params)
+                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                .join('&');
+            return `${url}${url.includes('?') ? '&' : '?'}${query}`;
+        }
+
+        function loadJSONP(url, timeoutMs = 30000) {
+            return new Promise((resolve, reject) => {
+                const callbackName = `__questionCloudCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                const script = document.createElement('script');
+                let timer = null;
+
+                function cleanup() {
+                    if (timer) clearTimeout(timer);
+                    if (script.parentNode) script.parentNode.removeChild(script);
+                    try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+                }
+
+                window[callbackName] = function(payload) {
+                    cleanup();
+                    resolve(payload);
+                };
+
+                script.src = buildUrl(url, { action: 'questions', callback: callbackName, t: Date.now() });
+                script.async = true;
+                script.onerror = () => {
+                    cleanup();
+                    reject(new Error('JSONP 載入失敗：請確認 Apps Script 支援 callback 參數。'));
+                };
+
+                timer = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('雲端題庫連線逾時。'));
+                }, timeoutMs);
+
+                document.body.appendChild(script);
+            });
+        }
+
+        function normalizeAnswerIndex(rawAnswer) {
+            if (rawAnswer === undefined || rawAnswer === null) return -1;
+            const text = String(rawAnswer).trim().toUpperCase();
+            const numeric = parseInt(text, 10);
+            if (!isNaN(numeric) && numeric >= 1 && numeric <= 4) return numeric - 1;
+            const letterMap = { A: 0, B: 1, C: 2, D: 3 };
+            if (Object.prototype.hasOwnProperty.call(letterMap, text)) return letterMap[text];
+            return -1;
+        }
+
+        function normalizeHeaderKey(key) {
+            return String(key ?? '')
+                .replace(/^\uFEFF/, '')
+                .replace(/\s+/g, '')
+                .replace(/[：:]/g, '')
+                .trim()
+                .toLowerCase();
+        }
+
+        function normalizeCellText(value) {
+            return String(value ?? '')
+                .replace(/^\uFEFF/, '')
+                .replace(/[\r\n\t]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function getField(row, keys) {
+            if (!row || typeof row !== 'object') return '';
+            const normalizedWantedKeys = keys.map(normalizeHeaderKey);
+            for (const key of keys) {
+                if (row[key] !== undefined && row[key] !== null && normalizeCellText(row[key]) !== '') {
+                    return normalizeCellText(row[key]);
+                }
+            }
+            for (const [actualKey, value] of Object.entries(row)) {
+                const normalizedActualKey = normalizeHeaderKey(actualKey);
+                if (normalizedWantedKeys.includes(normalizedActualKey) && normalizeCellText(value) !== '') {
+                    return normalizeCellText(value);
+                }
+            }
+            return '';
+        }
+
+        function valuesToObjectRows(values) {
+            if (!Array.isArray(values) || values.length < 2) return [];
+            const headers = values[0].map(h => normalizeCellText(h));
+            return values.slice(1).map(row => {
+                const obj = {};
+                headers.forEach((header, index) => { obj[header] = row[index] ?? ''; });
+                return obj;
+            });
+        }
+
+        function extractQuestionRows(payload) {
+            if (Array.isArray(payload)) {
+                if (payload.length > 0 && Array.isArray(payload[0])) return valuesToObjectRows(payload);
+                return payload;
+            }
+            if (!payload || typeof payload !== 'object') return [];
+            const candidateKeys = ['questions', 'data', 'rows', 'items'];
+            for (const key of candidateKeys) {
+                if (Array.isArray(payload[key])) {
+                    if (payload[key].length > 0 && Array.isArray(payload[key][0])) return valuesToObjectRows(payload[key]);
+                    return payload[key];
+                }
+            }
+            if (Array.isArray(payload.values)) return valuesToObjectRows(payload.values);
+            return [];
+        }
+
+        function normalizeLevelLabel(rawLevel) {
+            let text = normalizeCellText(rawLevel).replace(/[()（）]/g, '').replace(/^難度/, '').replace(/^級別/, '').trim();
+            const compact = text.replace(/\s+/g, '').toLowerCase();
+            const aliasMap = {
+                '初': '初級', '初級': '初級', 'easy': '初級', '簡單': '初級',
+                '中': '中級', '中級': '中級', 'normal': '中級', 'medium': '中級', '普通': '中級',
+                '高': '高級', '高級': '高級', 'hard': '高級', '困難': '高級',
+                '中高': '中高級', '中高級': '中高級', 'midhigh': '中高級'
+            };
+            if (aliasMap[compact]) return aliasMap[compact];
+            if (compact.includes('中高')) return '中高級';
+            if (compact.includes('初')) return '初級';
+            if (compact.includes('中')) return '中級';
+            if (compact.includes('高')) return '高級';
+            return text || '未分級';
+        }
+
+        function getThreatInfo(rawLevel) {
+            const level = normalizeLevelLabel(rawLevel);
+            const map = {
+                '初級': { text: '惡魔來襲（初級）', icon: 'fa-skull', className: 'px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/50' },
+                '中級': { text: '魂潮入侵（中級）', icon: 'fa-water', className: 'px-3 py-1 bg-cyan-500/20 text-cyan-300 text-xs rounded-full border border-cyan-500/50' },
+                '高級': { text: '惡魔公攻襲（高級）', icon: 'fa-dragon', className: 'px-3 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full border border-purple-500/50' },
+                '中高級': { text: '惡魔將強襲（中高級）', icon: 'fa-crown', className: 'px-3 py-1 bg-amber-500/20 text-amber-300 text-xs rounded-full border border-amber-500/50' }
+            };
+            return map[level] || { text: `未知威脅（${level}）`, icon: 'fa-circle-question', className: 'px-3 py-1 bg-gray-500/20 text-gray-300 text-xs rounded-full border border-gray-500/50' };
+        }
+
+        function renderThreatBadge(rawLevel) {
+            const badge = document.getElementById('threat-badge');
+            if (!badge) return;
+            const threat = getThreatInfo(rawLevel);
+            badge.className = threat.className;
+            badge.innerHTML = `<i class="fas ${threat.icon} text-xs mr-1"></i> ${escapeHTML(threat.text)}`;
+        }
+
+        function normalizeSheetQuestion(row, index) {
+            const level = normalizeLevelLabel(getField(row, ['級別', 'level', 'difficulty', '難度']));
+            const q = getField(row, ['題目', 'question', 'q']);
+            const option1 = getField(row, ['選項1', 'option1', 'option_a', 'A']);
+            const option2 = getField(row, ['選項2', 'option2', 'option_b', 'B']);
+            const option3 = getField(row, ['選項3', 'option3', 'option_c', 'C']);
+            const option4 = getField(row, ['選項4', 'option4', 'option_d', 'D']);
+            const answer = getField(row, ['答案', 'answer', 'ans']);
+            const explanation = getField(row, ['解析', 'explanation']);
+            const ans = normalizeAnswerIndex(answer);
+            const opts = [option1, option2, option3, option4];
+            if (!q || opts.some(opt => !opt) || ans < 0 || ans > 3) {
+                console.warn(`略過第 ${index + 1} 筆題目，欄位不完整：`, row);
+                return null;
+            }
+            return { id: row.id || row.ID || `cloud_${index + 1}`, level, q, opts, ans, explanation, source: 'google_sheets' };
+        }
+
+        async function importQuestionsFromCloud(options = {}) {
+            const btn = document.getElementById('btn-cloud-import');
+            const status = document.getElementById('cloud-import-status');
+            const countLabel = document.getElementById('cloud-question-count');
+            const apiUrl = getGasApiUrl();
+            const silent = Boolean(options.silent);
+            cloudQuestionLoadAttempted = true;
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>雲端匯入中...'; }
+            if (status) status.innerHTML = `<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>正在用 JSONP 連線：${escapeHTML(apiUrl)}</span>`;
+            try {
+                const payload = await loadJSONP(apiUrl);
+                const rows = extractQuestionRows(payload);
+                const parsedQuestions = rows.map((row, index) => normalizeSheetQuestion(row, index)).filter(Boolean);
+                if (parsedQuestions.length === 0) throw new Error('雲端資料沒有符合欄位格式的題目。');
+                questionsDB = parsedQuestions;
+                cloudQuestionsLoaded = true;
+                if (countLabel) countLabel.innerText = `已匯入 ${parsedQuestions.length} 題`;
+                if (status) status.innerHTML = `<span class="text-emerald-400"><i class="fas fa-check-circle mr-1"></i>成功匯入 ${parsedQuestions.length} 題。GitHub Pages 可正常使用。</span>`;
+                if (!silent) alert(`✅ 成功從 Google 試算表匯入 ${parsedQuestions.length} 題！`);
+            } catch (error) {
+                console.error('雲端題庫匯入失敗：', error);
+                if (countLabel) countLabel.innerText = '匯入失敗';
+                if (status) status.innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i>匯入失敗：${escapeHTML(error.message)}</span>`;
+                if (!silent) alert(`❌ 雲端題庫匯入失敗：${error.message}\n\nGitHub Pages 請改用支援 callback 的 Apps Script JSONP 版本。`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>從雲端匯入題庫'; }
+            }
+        }
+
+        function autoLoadCloudQuestions() {
+            const status = document.getElementById('cloud-import-status');
+            const countLabel = document.getElementById('cloud-question-count');
+            if (status) status.innerHTML = '<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>開啟遊戲，自動同步雲端題庫中...</span>';
+            if (countLabel) countLabel.innerText = '自動同步中';
+            importQuestionsFromCloud({silent:true});
+        }
+
+        document.addEventListener('DOMContentLoaded', autoLoadCloudQuestions);
 
         // ================= Gemini API 呼叫模組 (含指數退避重試) =================
         async function callGeminiAPI(prompt, systemInstruction = null, jsonSchema = null) {
@@ -571,8 +785,14 @@
             try {
                 const newQuestions = JSON.parse(textarea.value);
                 if (Array.isArray(newQuestions) && newQuestions.length > 0) {
-                    questionsDB = newQuestions;
-                    alert('成功套用 AI 題庫！下一場遊戲將使用新題目。');
+                    questionsDB = newQuestions.map((q, index) => ({
+                        level: normalizeLevelLabel(q.level || q.difficulty || '中級'),
+                        q: q.q || q.question,
+                        opts: q.opts || [q.option1, q.option2, q.option3, q.option4],
+                        ans: typeof q.ans === 'number' ? q.ans : normalizeAnswerIndex(q.answer),
+                        explanation: q.explanation || ''
+                    })).filter(q => q.q && Array.isArray(q.opts) && q.opts.length === 4 && q.ans >= 0);
+                    alert(`成功套用 AI 題庫！共 ${questionsDB.length} 題，下一場遊戲將使用新題目。`);
                 } else {
                     alert('資料格式有誤，無法套用。請確認格式為 JSON 陣列。');
                 }
@@ -580,275 +800,6 @@
                 alert('JSON 解析失敗，請確認內容格式是否正確。');
             }
         }
-
-        
-        // ================= Google 試算表雲端題庫匯入 =================
-        function normalizeAnswerIndex(rawAnswer) {
-            if (rawAnswer === undefined || rawAnswer === null) return -1;
-            const text = String(rawAnswer).trim().toUpperCase();
-
-            // 支援 1~4
-            const numeric = parseInt(text, 10);
-            if (!isNaN(numeric) && numeric >= 1 && numeric <= 4) return numeric - 1;
-
-            // 支援 A~D
-            const letterMap = { A: 0, B: 1, C: 2, D: 3 };
-            if (Object.prototype.hasOwnProperty.call(letterMap, text)) return letterMap[text];
-
-            return -1;
-        }
-
-        function escapeHTML(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        function normalizeHeaderKey(key) {
-            return String(key ?? '')
-                .replace(/^\uFEFF/, '')
-                .replace(/\s+/g, '')
-                .replace(/[：:]/g, '')
-                .trim()
-                .toLowerCase();
-        }
-
-        function normalizeCellText(value) {
-            return String(value ?? '')
-                .replace(/^\uFEFF/, '')
-                .replace(/[\r\n\t]+/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        function getField(row, keys) {
-            if (!row || typeof row !== 'object') return '';
-            const normalizedWantedKeys = keys.map(normalizeHeaderKey);
-
-            for (const key of keys) {
-                if (row[key] !== undefined && row[key] !== null && normalizeCellText(row[key]) !== '') {
-                    return normalizeCellText(row[key]);
-                }
-            }
-
-            for (const [actualKey, value] of Object.entries(row)) {
-                const normalizedActualKey = normalizeHeaderKey(actualKey);
-                if (normalizedWantedKeys.includes(normalizedActualKey) && normalizeCellText(value) !== '') {
-                    return normalizeCellText(value);
-                }
-            }
-
-            return '';
-        }
-
-        function valuesToObjectRows(values) {
-            if (!Array.isArray(values) || values.length < 2) return [];
-            const headers = values[0].map(h => normalizeCellText(h));
-            return values.slice(1).map(row => {
-                const obj = {};
-                headers.forEach((header, index) => {
-                    obj[header] = row[index] ?? '';
-                });
-                return obj;
-            });
-        }
-
-        function normalizeLevelLabel(rawLevel) {
-            let text = normalizeCellText(rawLevel)
-                .replace(/[()（）]/g, '')
-                .replace(/^難度/, '')
-                .replace(/^級別/, '')
-                .trim();
-
-            const aliasMap = {
-                '初': '初級',
-                '初級': '初級',
-                'easy': '初級',
-                '簡單': '初級',
-                '低': '初級',
-                '中': '中級',
-                '中級': '中級',
-                'normal': '中級',
-                'medium': '中級',
-                '普通': '中級',
-                '高': '高級',
-                '高級': '高級',
-                'hard': '高級',
-                '困難': '高級',
-                '中高': '中高級',
-                '中高級': '中高級',
-                'intermediatehigh': '中高級',
-                'midhigh': '中高級'
-            };
-
-            const compact = text.replace(/\s+/g, '').toLowerCase();
-            if (aliasMap[compact]) return aliasMap[compact];
-            if (compact.includes('中高')) return '中高級';
-            if (compact.includes('初')) return '初級';
-            if (compact.includes('中')) return '中級';
-            if (compact.includes('高')) return '高級';
-            return text || '未分級';
-        }
-
-        function getThreatInfo(rawLevel) {
-            const level = normalizeLevelLabel(rawLevel);
-            const map = {
-                '初級': {
-                    text: '惡魔來襲（初級）',
-                    icon: 'fa-skull',
-                    className: 'px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/50'
-                },
-                '中級': {
-                    text: '魂潮入侵（中級）',
-                    icon: 'fa-water',
-                    className: 'px-3 py-1 bg-cyan-500/20 text-cyan-300 text-xs rounded-full border border-cyan-500/50'
-                },
-                '高級': {
-                    text: '惡魔公攻襲（高級）',
-                    icon: 'fa-dragon',
-                    className: 'px-3 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full border border-purple-500/50'
-                },
-                '中高級': {
-                    text: '惡魔將強襲（中高級）',
-                    icon: 'fa-crown',
-                    className: 'px-3 py-1 bg-amber-500/20 text-amber-300 text-xs rounded-full border border-amber-500/50'
-                }
-            };
-            return map[level] || {
-                text: `未知威脅（${level}）`,
-                icon: 'fa-circle-question',
-                className: 'px-3 py-1 bg-gray-500/20 text-gray-300 text-xs rounded-full border border-gray-500/50'
-            };
-        }
-
-        function renderThreatBadge(rawLevel) {
-            const badge = document.getElementById('threat-badge');
-            if (!badge) return;
-            const threat = getThreatInfo(rawLevel);
-            badge.className = threat.className;
-            badge.innerHTML = `<i class="fas ${threat.icon} text-xs mr-1"></i> ${escapeHTML(threat.text)}`;
-        }
-
-        function extractQuestionRows(payload) {
-            // 支援 Apps Script 常見回傳格式：
-            // 1. { success:true, questions:[{...}] }
-            // 2. { data:[{...}] }
-            // 3. { values:[[header...],[row...]] }
-            // 4. 直接回傳 [{...}]
-            if (Array.isArray(payload)) {
-                if (payload.length > 0 && Array.isArray(payload[0])) return valuesToObjectRows(payload);
-                return payload;
-            }
-
-            if (!payload || typeof payload !== 'object') return [];
-
-            const candidateKeys = ['questions', 'data', 'rows', 'items'];
-            for (const key of candidateKeys) {
-                if (Array.isArray(payload[key])) {
-                    if (payload[key].length > 0 && Array.isArray(payload[key][0])) return valuesToObjectRows(payload[key]);
-                    return payload[key];
-                }
-            }
-
-            if (Array.isArray(payload.values)) return valuesToObjectRows(payload.values);
-
-            return [];
-        }
-
-        function normalizeSheetQuestion(row, index) {
-            const level = getField(row, ['級別', 'level', 'difficulty']);
-            const q = getField(row, ['題目', 'question', 'q']);
-            const option1 = getField(row, ['選項1', 'option1', 'option_a', 'A']);
-            const option2 = getField(row, ['選項2', 'option2', 'option_b', 'B']);
-            const option3 = getField(row, ['選項3', 'option3', 'option_c', 'C']);
-            const option4 = getField(row, ['選項4', 'option4', 'option_d', 'D']);
-            const answer = getField(row, ['答案', 'answer', 'ans']);
-            const explanation = getField(row, ['解析', 'explanation']);
-
-            const ans = normalizeAnswerIndex(answer);
-            const opts = [option1, option2, option3, option4];
-
-            if (!q || opts.some(opt => !opt) || ans < 0 || ans > 3) {
-                console.warn(`略過第 ${index + 1} 筆題目，欄位不完整：`, row);
-                return null;
-            }
-
-            return {
-                id: row.id || row.ID || `cloud_${index + 1}`,
-                level,
-                q,
-                opts,
-                ans,
-                explanation,
-                source: 'google_sheets'
-            };
-        }
-
-        async function importQuestionsFromCloud(options = {}) {
-            const btn = document.getElementById('btn-cloud-import');
-            const status = document.getElementById('cloud-import-status');
-            const countLabel = document.getElementById('cloud-question-count');
-            const apiUrl = getGasApiUrl();
-            const silent = Boolean(options.silent);
-            cloudQuestionLoadAttempted = true;
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>雲端匯入中...';
-            status.innerHTML = `<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>正在連線：${apiUrl}</span>`;
-
-            try {
-                // 預設帶 action=questions，若 GAS 沒用 action 也不影響 doGet 讀取
-                const joiner = apiUrl.includes('?') ? '&' : '?';
-                const response = await fetch(`${apiUrl}${joiner}action=questions`, {
-                    method: 'GET',
-                    cache: 'no-store'
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const payload = await response.json();
-                const rows = extractQuestionRows(payload);
-                const parsedQuestions = rows
-                    .map((row, index) => normalizeSheetQuestion(row, index))
-                    .filter(Boolean);
-
-                if (parsedQuestions.length === 0) {
-                    throw new Error('雲端資料沒有符合欄位格式的題目。');
-                }
-
-                questionsDB = parsedQuestions;
-                cloudQuestionsLoaded = true;
-
-                countLabel.innerText = `已匯入 ${parsedQuestions.length} 題`;
-                status.innerHTML = `<span class="text-emerald-400"><i class="fas fa-check-circle mr-1"></i>成功匯入 ${parsedQuestions.length} 題。下一場遊戲將使用雲端題庫。</span>`;
-                if (!silent) alert(`✅ 成功從 Google 試算表匯入 ${parsedQuestions.length} 題！`);
-
-            } catch (error) {
-                console.error('雲端題庫匯入失敗：', error);
-                countLabel.innerText = '匯入失敗';
-                status.innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i>匯入失敗：${error.message}</span>`;
-                if (!silent) alert(`❌ 雲端題庫匯入失敗：${error.message}\n\n請確認 Apps Script 已部署為「任何人皆可存取」，且 API 回傳 JSON。`);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>從雲端匯入題庫';
-            }
-        }
-
-
-        function autoLoadCloudQuestions() {
-            const status = document.getElementById('cloud-import-status');
-            const countLabel = document.getElementById('cloud-question-count');
-            if (status) status.innerHTML = '<span class="text-yellow-300"><i class="fas fa-sync fa-spin mr-1"></i>開啟遊戲，自動同步雲端題庫中...</span>';
-            if (countLabel) countLabel.innerText = '自動同步中';
-            importQuestionsFromCloud({silent:true});
-        }
-
-        document.addEventListener('DOMContentLoaded', autoLoadCloudQuestions);
 
         // ================= CSV 匯入與下載功能 =================
         function downloadSampleCSV() {
@@ -878,43 +829,33 @@
             reader.onload = function(e) {
                 const text = e.target.result;
                 try {
-                    // 解析換行
                     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
                     let newQuestions = [];
-                    
-                    // 跳過標題，從第二行開始解析
                     for(let i = 1; i < lines.length; i++) {
-                        // 處理 CSV 格式，容許欄位內有引號
-                        const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                        if (cols.length >= 6) {
-                            const q = cols[0].replace(/^"|"$/g, '').trim();
-                            const opts = [
-                                cols[1].replace(/^"|"$/g, '').trim(),
-                                cols[2].replace(/^"|"$/g, '').trim(),
-                                cols[3].replace(/^"|"$/g, '').trim(),
-                                cols[4].replace(/^"|"$/g, '').trim()
-                            ];
-                            // 將 1~4 轉為 0~3 陣列索引
-                            const ans = parseInt(cols[5].replace(/^"|"$/g, '').trim()) - 1; 
-                            const level = cols[6] ? cols[6].replace(/^"|"$/g, '').trim() : 'normal';
-                            
-                            if(q && !isNaN(ans) && ans >= 0 && ans <= 3) {
-                                newQuestions.push({q, opts, ans, level});
+                        const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
+                        if (cols.length >= 8) {
+                            const level = normalizeLevelLabel(cols[0]);
+                            const q = cols[1];
+                            const opts = [cols[2], cols[3], cols[4], cols[5]];
+                            const ans = normalizeAnswerIndex(cols[6]);
+                            const explanation = cols[7] || '';
+                            if(q && opts.every(Boolean) && ans >= 0 && ans <= 3) {
+                                newQuestions.push({level, q, opts, ans, explanation});
                             }
                         }
                     }
-
                     if (newQuestions.length > 0) {
-                        questionsDB = newQuestions; // 替換系統題庫
+                        questionsDB = newQuestions;
+                        cloudQuestionsLoaded = false;
                         alert(`✅ 成功匯入 ${newQuestions.length} 題！下一局將採用您上傳的 CSV 題庫。`);
                     } else {
-                        alert('❌ 匯入失敗，請確認 CSV 格式是否與公版完全一致（正解需填寫 1~4）。');
+                        alert('❌ 匯入失敗，請確認 CSV 欄位：級別、題目、選項1、選項2、選項3、選項4、答案、解析。');
                     }
                 } catch(err) {
                     alert('解析 CSV 發生錯誤，請檢查檔案編碼是否異常。');
                     console.error(err);
                 }
-                event.target.value = ''; // 允許重複上傳同一個檔案
+                event.target.value = '';
             };
             reader.readAsText(file);
         }
@@ -972,8 +913,6 @@
             currentState.gameDuration = seconds;
             currentState.timeLeft = seconds;
             localStorage.setItem('ghost_hunter_game_duration', String(seconds));
-            const label = seconds >= 3600 ? '1 小時' : `${Math.round(seconds / 60)} 分鐘`;
-            console.log(`作戰時間已設定為：${label}`);
         }
 
         function restoreGameDurationSetting() {
@@ -1002,11 +941,11 @@
             currentState.answeredCount = 0;
             
             if (!questionsDB || questionsDB.length === 0) {
-                alert('目前沒有可用題庫，請先從雲端匯入題庫或上傳 CSV。');
+                alert('目前沒有可用題庫，請先確認雲端題庫或上傳 CSV。');
                 return;
             }
 
-            // Time Attack 模式：不再限制 5 題。題庫答完會重新洗牌，直到時間歸零。
+            // Time Attack 模式：題庫答完會重新洗牌，直到時間歸零。
             currentQuestions = shuffleQuestions(questionsDB);
             
             const char = charConfig[currentState.character];
@@ -1024,7 +963,6 @@
             currentState.timerInterval = setInterval(() => {
                 currentState.timeLeft -= 0.1;
                 updateTimerUI();
-
                 if (currentState.timeLeft <= 0) {
                     endGame();
                 }
@@ -1037,12 +975,13 @@
                 endGame();
                 return;
             }
-
-            // 一輪題庫答完後重新洗牌，讓 30 分鐘 / 1 小時模式可以持續出題。
             if (currentState.questionIndex >= currentQuestions.length) {
                 currentQuestions = shuffleQuestions(questionsDB);
                 currentState.questionIndex = 0;
             }
+
+            const oldBox = document.getElementById('explanation-box');
+            if (oldBox) oldBox.remove();
 
             const qData = currentQuestions[currentState.questionIndex];
             document.getElementById('question-progress').innerText = `STAGE ${currentState.answeredCount + 1} / TIME ATTACK`;
@@ -1094,7 +1033,6 @@
             if (explanation) {
                 document.getElementById('options-container').insertAdjacentHTML('afterend', `<div id="explanation-box">${explanation}</div>`);
             }
-
             setTimeout(() => {
                 const oldBox = document.getElementById('explanation-box');
                 if (oldBox) oldBox.remove();
